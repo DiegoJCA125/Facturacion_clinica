@@ -8,3 +8,5 @@ venv/
 # Archivos del sistema
 .DS_Store
 Thumbs.db
+# Archivos generados por el pipeline ETL
+data/processed/
