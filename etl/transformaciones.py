@@ -1,101 +1,57 @@
-
-import pandas as pd
 from pathlib import Path
+import pandas as pd
 
 
-# --------------------------------------------------
-# 1. UNIR FACTURAS CON PLANES
-# --------------------------------------------------
-
-def unir_facturas_planes(tablas):
-    facturas = tablas["FACTURAS"].copy()
-    planes = tablas["PLANES"].copy()
-
-    # Agregamos el nombre y tipo del plan a cada factura.
-    facturas_con_planes = facturas.merge(
-        planes[["plan_id", "nombre_plan", "tipo_plan"]],
+def unir_facturas_planes(df_facturas, df_planes):
+    # CAMBIO: usamos LEFT JOIN para conservar las facturas
+    # aunque algun plan no tenga coincidencia.
+    return df_facturas.merge(
+        df_planes,
         on="plan_id",
         how="left",
         validate="many_to_one"
     )
 
-    return facturas_con_planes
 
-
-# --------------------------------------------------
-# 2. UNIR FACTURAS CON CUENTAS Y CARGOS
-# --------------------------------------------------
-
-def unir_facturas_cargos(tablas):
-    # Primero incorporamos la información de los planes.
-    facturas_con_planes = unir_facturas_planes(tablas)
-
-    relaciones = tablas["FACTURAS_CUENTAS"].copy()
-    detalles = tablas["CUENTAS_DETALLE"].copy()
-
-    # Relacionamos cada factura con sus cuentas.
-    facturas_con_cuentas = facturas_con_planes.merge(
-        relaciones,
+def unir_facturas_cargos(df_facturas, df_facturas_cuentas, df_cuentas_detalle):
+    # Paso 1: relacionar las facturas con sus cuentas.
+    facturas_cuentas = df_facturas.merge(
+        df_facturas_cuentas,
         on="factura_fiscal",
         how="left",
         validate="one_to_many"
     )
 
-    # Incorporamos los cargos registrados en cada cuenta.
-    facturas_con_cargos = facturas_con_cuentas.merge(
-        detalles,
+    # Paso 2: incorporar el valor de cada cargo.
+    facturas_cargos = facturas_cuentas.merge(
+        df_cuentas_detalle,
         on="numerodecuenta",
         how="left",
-        validate="many_to_many"
+        validate="many_to_one"
     )
 
-    return facturas_con_cargos
+    return facturas_cargos
 
 
-# --------------------------------------------------
-# 3. AGREGAR LOS NOMBRES DE LOS DEPARTAMENTOS
-# --------------------------------------------------
-
-def unir_facturas_departamentos(tablas):
-    facturas_con_cargos = unir_facturas_cargos(tablas)
-    departamentos = tablas["DEPARTAMENTOS"].copy()
-
-    # Incorporamos el nombre del departamento de cada cargo.
-    facturas_con_departamentos = facturas_con_cargos.merge(
-        departamentos[
-            ["departamento_id", "nombre_departamento"]
-        ],
+def unir_facturas_departamentos(df_facturas_cargos, df_departamentos):
+    # CAMBIO: el nombre del departamento se incorpora mediante
+    # departamento_id, sin eliminar cargos sin coincidencia.
+    return df_facturas_cargos.merge(
+        df_departamentos,
         on="departamento_id",
         how="left",
         validate="many_to_one"
     )
 
-    return facturas_con_departamentos
 
+def guardar_datos_procesados(df, ruta_salida):
+    ruta_salida = Path(ruta_salida)
+    ruta_salida.parent.mkdir(parents=True, exist_ok=True)
 
-# --------------------------------------------------
-# 4. GUARDAR LA TABLA CONSOLIDADA
-# --------------------------------------------------
+    df.to_csv(ruta_salida, index=False, encoding="utf-8-sig")
 
-def guardar_datos_procesados(tabla_consolidada):
-    # Localizamos la raíz del proyecto, sin depender
-    # de la carpeta desde la que se ejecute el comando.
-    base_dir = Path(__file__).resolve().parents[1]
+    print(f"Archivo guardado correctamente: {ruta_salida}")
+    print(f"Filas guardadas: {len(df)}")
+    print(f"Columnas guardadas: {len(df.columns)}")
 
-    # Creamos la carpeta de salida si no existe.
-    carpeta_salida = base_dir / "data" / "processed"
-    carpeta_salida.mkdir(parents=True, exist_ok=True)
-
-    # Definimos la ruta del archivo final.
-    ruta_csv = carpeta_salida / "facturacion_consolidada.csv"
-
-    # Exportamos sin el índice de pandas.
-    tabla_consolidada.to_csv(
-        ruta_csv,
-        index=False,
-        encoding="utf-8-sig"
-    )
-
-    print(f"\nArchivo procesado guardado en: {ruta_csv}")
-
-    return ruta_csv
+    return ruta_salida

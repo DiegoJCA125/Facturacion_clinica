@@ -1,309 +1,220 @@
-
 from pathlib import Path
 import pandas as pd
 
-# IMPORTACIÓN COMPATIBLE CON LAS DOS FORMAS DE EJECUTAR EL PIPELINE.
-# Si se ejecuta como módulo, usamos la importación relativa.
-# Si se ejecuta directamente como archivo, usamos la alternativa.
+# Permite ejecutar el archivo  directamente desde etl/.
 try:
     from .transformaciones import (
+        unir_facturas_planes,
+        unir_facturas_cargos,
         unir_facturas_departamentos,
-        guardar_datos_procesados
+        guardar_datos_procesados,
     )
 except ImportError:
     from transformaciones import (
+        unir_facturas_planes,
+        unir_facturas_cargos,
         unir_facturas_departamentos,
-        guardar_datos_procesados
+        guardar_datos_procesados,
     )
 
 
-# --------------------------------------------------
-# CONFIGURACIÓN DE RUTAS
-# --------------------------------------------------
-
-# Localizamos la raíz del proyecto.
-BASE_DIR = Path(__file__).resolve().parents[1]
-
-# Ruta del Excel con los datos de entrada.
-RUTA_EXCEL = (
-    BASE_DIR / "data" / "raw" / "facturacion_clinica.xlsx"
-)
+# Rutas basadas en la ubicacion del proyecto
+RAIZ_PROYECTO = Path(__file__).resolve().parents[1]
+RUTA_EXCEL = RAIZ_PROYECTO / "data" / "raw" / "facturacion_clinica.xlsx"
+RUTA_CSV = RAIZ_PROYECTO / "data" / "processed" / "facturacion_consolidada.csv"
 
 
-# --------------------------------------------------
-# 1. EXTRACCIÓN
-# --------------------------------------------------
-
-def extraer_datos():
-    # Confirmamos que exista el archivo antes de leerlo.
-    if not RUTA_EXCEL.exists():
-        raise FileNotFoundError(
-            f"No se encontró el archivo Excel: {RUTA_EXCEL}"
-        )
-
-    # Leemos las cinco hojas del archivo de Excel.
-    tablas = {
-        "FACTURAS": pd.read_excel(
-            RUTA_EXCEL, sheet_name="FACTURAS"
-        ),
-        "PLANES": pd.read_excel(
-            RUTA_EXCEL, sheet_name="PLANES"
-        ),
-        "FACTURAS_CUENTAS": pd.read_excel(
-            RUTA_EXCEL, sheet_name="FACTURAS_CUENTAS"
-        ),
-        "CUENTAS_DETALLE": pd.read_excel(
-            RUTA_EXCEL, sheet_name="CUENTAS_DETALLE"
-        ),
-        "DEPARTAMENTOS": pd.read_excel(
-            RUTA_EXCEL, sheet_name="DEPARTAMENTOS"
-        )
-    }
-
-    print("Extracción completada: cinco tablas cargadas.")
-
-    return tablas
-
-
-# --------------------------------------------------
-# 2. VALIDACIÓN DE ESTRUCTURA
-# --------------------------------------------------
-
-def validar_estructura(tablas):
-    # Columnas obligatorias para cada tabla.
-    columnas_esperadas = {
-        "FACTURAS": [
-            "factura_fiscal", "fecha_factura",
-            "plan_id", "total_factura"
-        ],
-        "PLANES": [
-            "plan_id", "nombre_plan", "tipo_plan"
-        ],
-        "FACTURAS_CUENTAS": [
-            "factura_fiscal", "numerodecuenta"
-        ],
-        "CUENTAS_DETALLE": [
-            "numerodecuenta", "departamento_id",
-            "valor_cargo"
-        ],
-        "DEPARTAMENTOS": [
-            "departamento_id", "nombre_departamento"
-        ]
-    }
-
-    # Revisamos que cada tabla tenga sus columnas requeridas.
-    for nombre_tabla, columnas in columnas_esperadas.items():
-        if nombre_tabla not in tablas:
-            raise ValueError(
-                f"No se encontró la tabla requerida: {nombre_tabla}"
-            )
-
-        columnas_faltantes = [
-            columna
-            for columna in columnas
-            if columna not in tablas[nombre_tabla].columns
-        ]
-
-        if columnas_faltantes:
-            raise ValueError(
-                f"La tabla {nombre_tabla} no tiene estas columnas: "
-                f"{columnas_faltantes}"
-            )
-
-    print("La estructura de las cinco tablas es correcta.")
-
-
-# --------------------------------------------------
-# 3. VALIDACIÓN DE CALIDAD DE LOS DATOS
-# --------------------------------------------------
-
-def validar_calidad(tablas):
-    facturas = tablas["FACTURAS"]
-    planes = tablas["PLANES"]
-    relaciones = tablas["FACTURAS_CUENTAS"]
-    detalles = tablas["CUENTAS_DETALLE"]
-    departamentos = tablas["DEPARTAMENTOS"]
-
-    # 1. Detectamos todas las filas que tienen una factura duplicada.
-    facturas_duplicadas = facturas[
-        facturas.duplicated(
-            subset=["factura_fiscal"], keep=False
-        )
-    ]
-
-    # 2. Detectamos cuentas repetidas en la tabla de relaciones.
-    cuentas_duplicadas = relaciones[
-        relaciones.duplicated(
-            subset=["numerodecuenta"], keep=False
-        )
-    ]
-
-    # 3. Detectamos facturas que no tienen una cuenta asociada.
-    facturas_con_cuenta = relaciones["factura_fiscal"].unique()
-
-    facturas_sin_cuentas = facturas[
-        ~facturas["factura_fiscal"].isin(facturas_con_cuenta)
-    ]
-
-    # 4. Detectamos relaciones que apuntan a facturas inexistentes.
-    cuentas_sin_factura = relaciones[
-        ~relaciones["factura_fiscal"].isin(
-            facturas["factura_fiscal"]
-        )
-    ]
-
-    # 5. Detectamos cargos que usan departamentos inexistentes.
-    departamentos_invalidos = detalles[
-        ~detalles["departamento_id"].isin(
-            departamentos["departamento_id"]
-        )
-    ]
-
-    # 6. Detectamos facturas que tienen un plan inexistente.
-    planes_invalidos = facturas[
-        ~facturas["plan_id"].isin(planes["plan_id"])
-    ]
-
-    # 7. Sumamos los cargos por factura para compararlos
-    # con el total registrado en la tabla FACTURAS.
-    detalle_completo = relaciones.merge(
-        detalles,
-        on="numerodecuenta",
-        how="left"
+def validar_datos(facturas, planes, facturas_cuentas,
+                  cuentas_detalle, departamentos):
+    # VALIDACIoN 1: buscara facturas duplicadas.
+    duplicados_facturas = int(
+        facturas["factura_fiscal"].duplicated().sum()
     )
 
-    suma_cargos = (
-        detalle_completo
+    # VALIDACIoN 2: buscara cuentas duplicadas en el detalle.
+    duplicados_cuentas = int(
+        cuentas_detalle["numerodecuenta"].duplicated().sum()
+    )
+
+    # VALIDACIoN 3: buscara facturas que no tienen ninguna cuenta relacionada.
+    facturas_con_cuenta = set(
+        facturas_cuentas["factura_fiscal"].dropna()
+    )
+    facturas_sin_cuenta = int(
+        (~facturas["factura_fiscal"].isin(facturas_con_cuenta)).sum()
+    )
+
+    # VALIDACIoN 4: buscararelaciones que apuntan a facturas inexistentes.
+    ids_facturas = set(facturas["factura_fiscal"].dropna())
+    relaciones_sin_factura = int(
+        (~facturas_cuentas["factura_fiscal"].isin(ids_facturas)).sum()
+    )
+
+    # VALIDACIoN 5: buscara cargos con departamentos inexistentes.
+    ids_departamentos = set(departamentos["departamento_id"].dropna())
+    departamentos_invalidos = int(
+        (~cuentas_detalle["departamento_id"].isin(ids_departamentos)).sum()
+    )
+
+    # VALIDACIoN 6: buscarafacturas con planes inexistentes.
+    ids_planes = set(planes["plan_id"].dropna())
+    planes_invalidos = int(
+        (~facturas["plan_id"].isin(ids_planes)).sum()
+    )
+
+    # VALIDACIoN 7: diferencias entre el total de la factura y la suma de sus cargos. Solo se comparan facturas sin duplicados y con relaciones identificables para no falsear el resultado.
+    facturas_unicas = facturas.drop_duplicates(
+        subset="factura_fiscal", keep=False
+    )
+    relaciones_validas = facturas_cuentas[
+        facturas_cuentas["factura_fiscal"].isin(ids_facturas)
+    ]
+    cargos_validos = cuentas_detalle[
+        cuentas_detalle["numerodecuenta"].isin(
+            set(relaciones_validas["numerodecuenta"].dropna())
+        )
+    ]
+
+    cargos_por_factura = (
+        relaciones_validas
+        .merge(cargos_validos, on="numerodecuenta", how="inner")
         .groupby("factura_fiscal")["valor_cargo"]
-        .sum(min_count=1)
-        .reset_index()
-        .rename(columns={"valor_cargo": "suma_cargos"})
+        .sum()
     )
 
-    comparacion = facturas[
-        ["factura_fiscal", "total_factura"]
-    ].merge(
-        suma_cargos,
-        on="factura_fiscal",
-        how="left"
+    comparacion = facturas_unicas.set_index("factura_fiscal")[
+        "total_factura"
+    ].to_frame().join(cargos_por_factura.rename("total_cargos"))
+
+    comparacion = comparacion.dropna(subset=["total_cargos"])
+    diferencias_totales = int(
+        (comparacion["total_factura"] != comparacion["total_cargos"]).sum()
     )
 
-    facturas_con_diferencias = comparacion[
-        comparacion["suma_cargos"].isna()
-        | (
-            comparacion["total_factura"]
-            != comparacion["suma_cargos"]
-        )
-    ]
-
-    # Consolidamos los resultados de las siete validaciones.
     resultados = {
-        "Facturas duplicadas (filas involucradas)":
-            len(facturas_duplicadas),
-        "Cuentas duplicadas (filas involucradas)":
-            len(cuentas_duplicadas),
-        "Facturas sin cuentas":
-            len(facturas_sin_cuentas),
-        "Relaciones con factura inexistente":
-            len(cuentas_sin_factura),
-        "Detalles con departamento inválido":
-            len(departamentos_invalidos),
-        "Facturas con plan inválido":
-            len(planes_invalidos),
-        "Facturas con diferencias en totales":
-            len(facturas_con_diferencias)
+        "Facturas duplicadas": duplicados_facturas,
+        "Cuentas duplicadas": duplicados_cuentas,
+        "Facturas sin cuentas": facturas_sin_cuenta,
+        "Relaciones sin factura": relaciones_sin_factura,
+        "Departamentos invalidos": departamentos_invalidos,
+        "Planes invalidos": planes_invalidos,
+        "Diferencias en totales": diferencias_totales,
     }
 
-    # Mostramos las validaciones una sola vez.
-    print("\n========================================")
-    print("     VALIDACIÓN DE CALIDAD DE DATOS")
-    print("========================================")
-
+    print("\nVALIDACIONES DE CALIDAD")
     for nombre, cantidad in resultados.items():
-        print(f"{nombre}: {cantidad}")
+        estado = "OK" if cantidad == 0 else "ERROR"
+        print(f"[{estado}] {nombre}: {cantidad}")
 
     return resultados
 
-
-# --------------------------------------------------
-# 4. EJECUCIÓN COMPLETA DEL PIPELINE
-# --------------------------------------------------
 
 def ejecutar_pipeline():
-    print("\nINICIANDO PIPELINE DE FACTURACIÓN")
-    print("----------------------------------------")
+    print("=" * 55)
+    print("INICIANDO PIPELINE DE FACTURACIoN CLiNICA")
+    print("=" * 55)
 
-    # ETAPA 1: extraemos los datos del Excel.
-    tablas = extraer_datos()
-
-    # ETAPA 2: verificamos que las tablas estén completas.
-    validar_estructura(tablas)
-
-    # ETAPA 3: ejecutamos las siete validaciones de calidad.
-    resultados = validar_calidad(tablas)
-
-    # Si una validación encuentra problemas, detenemos el proceso.
-    if any(cantidad > 0 for cantidad in resultados.values()):
-        print(
-            "\nPipeline detenido: se encontraron problemas "
-            "de calidad. Revisa los datos antes de continuar."
+    if not RUTA_EXCEL.exists():
+        raise FileNotFoundError(
+            f"No se encontro el archivo: {RUTA_EXCEL}\n"
+            "Verifica que exista o genera los datos sinteticos."
         )
-        return resultados
 
-    print("\nLos datos superaron las siete validaciones.")
+    # Lectura de las cinco hojas del archivo Excel.
+    hojas = pd.read_excel(RUTA_EXCEL, sheet_name=None)
 
-    # ETAPA 4: unimos facturas, planes, cuentas, cargos
-    # y departamentos.
-    tabla_consolidada = unir_facturas_departamentos(tablas)
+    hojas_requeridas = [
+        "FACTURAS",
+        "PLANES",
+        "FACTURAS_CUENTAS",
+        "CUENTAS_DETALLE",
+        "DEPARTAMENTOS",
+    ]
 
-    # Verificamos que cada cargo tenga un departamento asociado.
-    cargos_sin_departamento = (
-        tabla_consolidada["nombre_departamento"].isna().sum()
+    for hoja in hojas_requeridas:
+        if hoja not in hojas:
+            raise ValueError(f"Falta la hoja requerida: {hoja}")
+
+    facturas = hojas["FACTURAS"]
+    planes = hojas["PLANES"]
+    facturas_cuentas = hojas["FACTURAS_CUENTAS"]
+    cuentas_detalle = hojas["CUENTAS_DETALLE"]
+    departamentos = hojas["DEPARTAMENTOS"]
+
+    # Verificara las columnas necesarias antes de transformar.
+    columnas_requeridas = {
+        "FACTURAS": [
+            "factura_fiscal", "fecha_factura", "plan_id", "total_factura"
+        ],
+        "PLANES": ["plan_id", "nombre_plan", "tipo_plan"],
+        "FACTURAS_CUENTAS": ["factura_fiscal", "numerodecuenta"],
+        "CUENTAS_DETALLE": [
+            "numerodecuenta", "departamento_id", "valor_cargo"
+        ],
+        "DEPARTAMENTOS": ["departamento_id", "nombre_departamento"],
+    }
+
+    for nombre, columnas in columnas_requeridas.items():
+        faltantes = set(columnas) - set(hojas[nombre].columns)
+        if faltantes:
+            raise ValueError(
+                f"En {nombre} faltan estas columnas: {sorted(faltantes)}"
+            )
+
+    resultados = validar_datos(
+        facturas, planes, facturas_cuentas,
+        cuentas_detalle, departamentos
     )
 
-    print("\n========================================")
-    print("       RESULTADO DE LA TRANSFORMACIÓN")
-    print("========================================")
-    print("Filas consolidadas:", len(tabla_consolidada))
-    print("Columnas consolidadas:", len(tabla_consolidada.columns))
-    print("Cargos sin nombre de departamento:", cargos_sin_departamento)
+    # No producira el CSV final si las validaciones detectan problemas.
+    errores = {nombre: cantidad for nombre, cantidad in resultados.items()
+               if cantidad > 0}
 
-    # Si hay departamentos sin identificar, no guardamos el CSV.
-    if cargos_sin_departamento > 0:
+    if errores:
+        raise ValueError(
+            "El pipeline se detuvo porque hay errores de calidad. "
+            "Revisa el detalle anterior antes de generar el resultado final."
+        )
+
+    # Uniones sucesivas para conservar las funciones del proyecto.
+    df = unir_facturas_planes(facturas, planes)
+
+    df = unir_facturas_cargos(
+        df, facturas_cuentas, cuentas_detalle
+    )
+
+    df = unir_facturas_departamentos(df, departamentos)
+
+    # Mantener el formato consolidado de 10 columnas.
+    columnas_salida = [
+        "factura_fiscal",
+        "fecha_factura",
+        "plan_id",
+        "nombre_plan",
+        "tipo_plan",
+        "total_factura",
+        "numerodecuenta",
+        "departamento_id",
+        "nombre_departamento",
+        "valor_cargo",
+    ]
+
+    df = df[columnas_salida]
+
+    if df["nombre_departamento"].isna().any():
         raise ValueError(
             "Hay cargos sin nombre de departamento. "
-            "Revisa las relaciones antes de continuar."
+            "No se generara el CSV final."
         )
 
-    # ETAPA 5: guardamos la tabla consolidada.
-    ruta_csv = guardar_datos_procesados(tabla_consolidada)
+    guardar_datos_procesados(df, RUTA_CSV)
 
-    # ETAPA 6: volvemos a leer el CSV para comprobar el resultado.
-    datos_guardados = pd.read_csv(ruta_csv)
+    print("\nPIPELINE FINALIZADO CORRECTAMENTE")
+    print(f"Filas consolidadas: {len(df)}")
+    print(f"Archivo de salida: {RUTA_CSV}")
 
-    print("\n========================================")
-    print("       COMPROBACIÓN DEL CSV GUARDADO")
-    print("========================================")
-    print("Filas de la tabla consolidada:", len(tabla_consolidada))
-    print("Filas leídas desde el CSV:", len(datos_guardados))
-    print("Columnas guardadas:", len(datos_guardados.columns))
-
-    # Confirmamos que coincidan las cantidades de filas y columnas.
-    if (
-        len(tabla_consolidada) != len(datos_guardados)
-        or len(tabla_consolidada.columns) != len(datos_guardados.columns)
-    ):
-        raise ValueError(
-            "El CSV guardado no coincide en cantidad de filas "
-            "o columnas con la tabla consolidada."
-        )
-
-    print("El CSV conserva la cantidad de filas y columnas.")
-    print("\nPIPELINE FINALIZADO CORRECTAMENTE.")
-
-    return resultados
+    return df
 
 
-# Ejecutamos el proceso solo si este archivo se ejecuta directamente.
 if __name__ == "__main__":
     ejecutar_pipeline()
