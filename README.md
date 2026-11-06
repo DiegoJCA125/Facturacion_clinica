@@ -1,75 +1,178 @@
-# Proyecto de FacturaciÃ³n ClÃ­nica â€” ETL
+# ?? ETL de Facturación Clínica | Python · SQL · Power BI
 
-## DescripciÃ³n
+## Descripción del proyecto
 
-Proyecto de prÃ¡ctica de IngenierÃ­a de Datos orientado al procesamiento y anÃ¡lisis de informaciÃ³n de facturaciÃ³n clÃ­nica mediante datos sintÃ©ticos.
+Proyecto de Ingeniería de Datos enfocado en la construcción de un proceso ETL (Extract, Transform, Load) para procesar y consolidar información de facturación de una institución de salud.
 
-El objetivo es construir un proceso ETL que permita extraer, validar, transformar y preparar los datos para su posterior almacenamiento en una base de datos y anÃ¡lisis mediante herramientas de inteligencia de negocios.
+Se utilizaron datos sintéticos que simulan operaciones de facturación clínica, permitiendo trabajar con información similar a la de un entorno real sin exponer datos sensibles.
 
-## TecnologÃ­as utilizadas
+El objetivo es transformar datos de diferentes fuentes en información confiable, aplicando controles de calidad y generando indicadores para apoyar la toma de decisiones.
 
-- **Python:** generaciÃ³n y procesamiento de datos.
-- **Pandas:** manipulaciÃ³n y validaciÃ³n de tablas.
-- **Faker:** generaciÃ³n de datos ficticios.
-- **OpenPyXL:** creaciÃ³n de archivos Excel.
-- **Git y GitHub:** control de versiones.
+## ?? Objetivos
 
-## Modelo de datos
+- Construir un pipeline ETL utilizando Python.
+- Consolidar información de facturas, cuentas, cargos, departamentos y planes de salud.
+- Implementar validaciones de calidad de datos.
+- Detectar inconsistencias y relaciones incorrectas.
+- Generar un archivo consolidado para análisis.
+- Visualizar los resultados mediante Power BI.
 
-El conjunto de datos estÃ¡ organizado en cinco tablas:
+## ??? Tecnologías utilizadas
 
-1. **FACTURAS:** identificador, fecha, plan y total facturado.
-2. **PLANES:** nombre y tipo de plan.
-3. **FACTURAS_CUENTAS:** relaciÃ³n entre facturas y cuentas.
-4. **CUENTAS_DETALLE:** departamento y valor de cada cargo.
-5. **DEPARTAMENTOS:** catÃ¡logo de departamentos.
+| Tecnología | Aplicación |
 
-## Validaciones de calidad
+| Python | Desarrollo del pipeline ETL |
+| Pandas | Manipulación y transformación de datos |
+| SQL | Fundamentos de consulta y estructuración de datos |
+| Pytest | Pruebas automatizadas |
+| Power BI | Análisis y visualización |
+| Git y GitHub | Control de versiones |
 
-El proyecto contempla controles para detectar:
+## ?? Proceso ETL
+
+### 1. Extract ? Extracción
+Lectura de archivos con información sintética de:
+- Facturas.
+- Planes de salud.
+- Relación de facturas y cuentas.
+- Detalle de cargos.
+- Departamentos.
+
+### 2. Transform ? Transformación
+- Limpieza y preparación de datos.
+- Integración de las diferentes fuentes.
+- Consolidación de información mediante sus relaciones.
+- Validación de integridad y consistencia.
+
+### 3. Load ? Carga
+Generación del archivo consolidado:
+
+data/processed/facturacion_consolidada.csv`
+
+Este archivo sirve como fuente para el análisis en Power BI.
+
+## ?? Validaciones de calidad de datos
+
+El pipeline implementa controles para identificar:
 
 - Facturas duplicadas.
 - Cuentas duplicadas.
 - Facturas sin cuentas asociadas.
 - Relaciones con facturas inexistentes.
-- Departamentos invÃ¡lidos.
-- Diferencias entre el total de una factura y la suma de sus cargos.
+- Departamentos inválidos.
+- Planes de salud inválidos.
+- Diferencias entre los totales de facturación y sus cargos.
 
-TambiÃ©n se realizan pruebas con errores controlados para comprobar el funcionamiento de las validaciones.
+## ?? Resultados obtenidos
 
-## Estructura del proyecto
+En la última ejecución exitosa del pipeline se obtuvieron los siguientes resultados:
+
+| Indicador | Resultado |
+
+| Facturas procesadas | 100 |
+| Filas consolidadas | 284 |
+| Columnas generadas | 10 |
+| Facturas duplicadas | 0 |
+| Cuentas duplicadas | 0 |
+| Relaciones sin factura | 0 |
+| Departamentos inválidos | 0 |
+| Planes inválidos | 0 |
+| Diferencias en totales | 0 |
+
+## ?? Dashboard en Power BI
+
+El informe permite analizar:
+
+- Total de facturas.
+- Total facturado.
+- Totalidad de cargos.
+- Distribución de cargos por departamento.
+- Evolución mensual de la facturación.
+- Filtros por plan de salud y departamento.
+
+## ??? Estructura del proyecto
 
 ```text
-ETL_Facturacion_Clinica/
-â”œâ”€â”€ data/
-â”‚   â”œâ”€â”€ raw/
-â”‚   â”œâ”€â”€ processed/
-â”‚   â””â”€â”€ output/
-â”œâ”€â”€ etl/
-â”œâ”€â”€ sql/
-â”œâ”€â”€ .gitignore
-â”œâ”€â”€ README.md
-â””â”€â”€ generar_datos.py
+Facturacion_clinica/
+?
+??? data/
+?   ??? raw/
+?   ??? processed/
+?
+??? etl/
+?   ??? __init__.py
+?   ??? pipeline.py
+?   ??? transformaciones.py
+?   ??? generar_datos.py
+?
+??? tests/
+?
+??? .gitignore
+??? requirements.txt
+??? README.md
 ```
 
-## Estado actual
+## ?? Instalación y ejecución
 
-- [x] GeneraciÃ³n de datos sintÃ©ticos.
-- [x] CreaciÃ³n del archivo Excel con cinco tablas.
-- [x] Validaciones iniciales de calidad de datos.
-- [x] Pruebas controladas de errores.
-- [ ] ConstrucciÃ³n del proceso ETL de limpieza.
-- [ ] SeparaciÃ³n de registros vÃ¡lidos y rechazados.
-- [ ] Almacenamiento en PostgreSQL.
-- [ ] Consultas SQL para anÃ¡lisis.
-- [ ] CreaciÃ³n de un tablero en Power BI.
+### 1. Clonar el repositorio
 
-## Consideraciones
+```bash
+git clone https://github.com/DiegoJCA125/Facturacion_clinica.git
+cd Facturacion_clinica
+```
 
-Todos los datos utilizados en este proyecto son sintÃ©ticos y se destinan exclusivamente a fines educativos y de portafolio. No se deben utilizar ni publicar datos personales o informaciÃ³n confidencial de pacientes.
+### 2. Crear entorno virtual
 
-## Autor
+```bash
+python -m venv .venv
+```
 
-Diego Carmona
+### 3. Activar entorno virtual (Windows)
 
-Proyecto de aprendizaje y portafolio en IngenierÃ­a de Datos.
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+### 4. Instalar dependencias
+
+```bash
+pip install -r requirements.txt
+```
+
+### 5. Ejecutar el pipeline
+
+```bash
+python -m etl.pipeline
+```
+
+### 6. Ejecutar pruebas automatizadas
+
+```bash
+python -m pytest tests/ -v
+```
+
+## ?? Aprendizajes
+
+Este proyecto permitió fortalecer conocimientos en:
+
+- Desarrollo de procesos ETL.
+- Manipulación de datos con Python y Pandas.
+- Integración de fuentes relacionadas.
+- Validación de calidad e integridad de datos.
+- Pruebas automatizadas con Pytest.
+- Preparación de datos para herramientas de BI.
+- Control de versiones con Git y GitHub.
+
+## ?? Consideraciones sobre los datos
+
+Todos los datos utilizados en este proyecto son sintéticos y fueron generados con fines educativos y de demostración. No se utilizan registros reales de pacientes ni información confidencial de instituciones de salud.
+
+## ????? Autor
+
+**Juan Diego Carmona**
+
+Ingeniero de Sistemas | En formación en Ingeniería de Datos.
+
+GitHub: https://github.com/DiegoJCA125
+
+LinkedIn: https://www.linkedin.com/in/diegojca125
